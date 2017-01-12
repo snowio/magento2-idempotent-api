@@ -1,0 +1,10 @@
+{
+    "name": "snowio/magento2-idempotent-api",
+    "type": "magento2-module",
+    "license": "MIT",
+    "require": {
+        "php": ">=7",
+        "magento/framework": "^100",
+        "snowio/magento2-lock": "^1"
+    }
+}
