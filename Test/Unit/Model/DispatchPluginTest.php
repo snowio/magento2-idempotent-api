@@ -4,9 +4,9 @@ namespace SnowIO\IdempotentAPI\Test\Unit\Model;
 
 use Magento\Framework\App\FrontControllerInterface;
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
-use Magento\TestFramework\Helper\Bootstrap;
 use PHPUnit_Framework_MockObject_MockObject;
 use PHPUnit_Framework_TestCase;
 use SnowIO\IdempotentAPI\Model\DispatchPlugin;
@@ -55,7 +55,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function setUp()
     {
-        $this->objectManager  = Bootstrap::getObjectManager();
+        $this->objectManager  = new ObjectManager($this);
         $this->mockResourceTimestampRespository = $this->getMockBuilder(ResourceTimestampRepository::class)
             ->disableOriginalConstructor()->setMethods(['save', 'get'])->getMock();
         $this->mockMagento2LockService = $this->getMockBuilder(LockService::class)
@@ -76,14 +76,14 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     public function testWithNoId()
     {
         /** @var Request $request */
-        $request = $this->objectManager->create(Request::class);
+        $request = $this->objectManager->getObject(Request::class);
 
         $headers = (new Headers())
             ->addHeaderLine("ACME-Resource-Identifier", "NonResource");
         $request->setHeaders($headers);
 
         /** @var Response $response */
-        $response = $this->objectManager->create(Response::class);
+        $response = $this->objectManager->getObject(Response::class);
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -93,14 +93,14 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     public function testWithNoTimestamp()
     {
         /** @var Request $request */
-        $request = $this->objectManager->create(Request::class);
+        $request = $this->objectManager->getObject(Request::class);
 
         $headers = (new Headers())
             ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource");
         $request->setHeaders($headers);
 
         /** @var Response $response */
-        $response = $this->objectManager->create(Response::class);
+        $response = $this->objectManager->getObject(Response::class);
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -114,7 +114,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
             ->willReturn(['timestamp' => microtime(true), 'identifier' => 'SnowIO-TestResource']);
 
         /** @var Request $request */
-        $request = $this->objectManager->create(Request::class);
+        $request = $this->objectManager->getObject(Request::class);
 
         $headers = (new Headers())
             ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource")
@@ -122,7 +122,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $request->setHeaders($headers);
 
         /** @var Response $response */
-        $response = $this->objectManager->create(Response::class);
+        $response = $this->objectManager->getObject(Response::class);
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -136,7 +136,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $this->mockMagento2LockService->method('acquire')->willReturn(false);
 
         /** @var Request $request */
-        $request = $this->objectManager->create(Request::class);
+        $request = $this->objectManager->getObject(Request::class);
 
         $headers = (new Headers())
             ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource")
@@ -144,7 +144,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $request->setHeaders($headers);
 
         /** @var Response $response */
-        $response = $this->objectManager->create(Response::class);
+        $response = $this->objectManager->getObject(Response::class);
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
