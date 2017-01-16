@@ -13,7 +13,7 @@ class ResourceModificationTimeRepository
         $this->dbConnection = $dbContext->getResources()->getConnection($connectionName);
     }
 
-    public function getLastModificationTime(string $identifier) : string
+    public function getLastModificationTime(string $identifier)
     {
         $identifier = md5($identifier);
         $select = $this->dbConnection->select()
@@ -21,16 +21,27 @@ class ResourceModificationTimeRepository
             ->where('t.identifier = ?', $identifier);
         $result = $this->dbConnection->fetchOne($select);
 
-        return $result ? (string)$result : false;
-
+        return $result ? (string)$result : null;
     }
 
     public function updateModificationTime(string $identifier, string $modificationTime, string $expectedModificationTime = null)
     {
         $identifier = md5($identifier);
-        $this->dbConnection->insert($this->dbConnection->getTableName('webapi_resource_modification_log'), [
-           'identifier' => $identifier,
-            'timestamp' => $modificationTime
-        ]);
+
+        if ($expectedModificationTime !== null) {
+            $rowsAffected = $this->dbConnection->update($this->dbConnection->getTableName('webapi_resource_modification_log'),
+                [
+                    'timestamp' => $modificationTime
+                ], ['identifier = ?' => $identifier, 'timestamp = ?', $expectedModificationTime]);
+
+            if ($rowsAffected === 0) {
+                throw new \RuntimeException('There has been a conflict updating the web api resource');
+            }
+        } else {
+            //new resource that has never been modified
+            $this->dbConnection->insert($this->dbConnection->getTableName('webapi_resource_modification_log'),[
+                'identifier = ?' => $identifier, 'timestamp = ?' => $modificationTime
+            ]);
+        }
     }
 }

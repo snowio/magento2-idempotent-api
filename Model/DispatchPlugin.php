@@ -37,7 +37,7 @@ class DispatchPlugin
     }
 
     public function aroundDispatch(
-        FrontControllerInterface $frontController,
+        $frontController,
         \Closure $proceed,
         \Magento\Framework\App\RequestInterface $request
     ) {
@@ -57,7 +57,7 @@ class DispatchPlugin
             $resourceId = $this->request->getPathInfo();
         }
 
-        if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
+         if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
             $this->response->setStatusCode(409);
             return $this->response;
         }

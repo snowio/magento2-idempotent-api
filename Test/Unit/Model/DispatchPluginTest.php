@@ -4,8 +4,10 @@ namespace SnowIO\IdempotentAPI\Test\Unit\Model;
 
 use Magento\Framework\App\FrontControllerInterface;
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Adapter\AdapterInterface;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
+use Magento\Webapi\Controller\Rest;
 use PHPUnit_Framework_MockObject_MockObject;
 use PHPUnit_Framework_TestCase;
 use SnowIO\IdempotentAPI\Model\DispatchPlugin;
@@ -14,9 +16,7 @@ use SnowIO\Lock\Api\LockService;
 use Magento\Framework\Webapi\Response;
 use \Magento\Framework\App\RequestInterface;
 use Zend\Http\Header\Date;
-use Zend\Http\Header\HeaderInterface;
 use Zend\Http\Header\IfUnmodifiedSince;
-
 
 class DispatchPluginTest extends PHPUnit_Framework_TestCase
 {
@@ -38,11 +38,14 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     /** @var  FrontControllerInterface | \PHPUnit_Framework_MockObject_MockObject */
     private $mockFrontController;
 
-    /** @var  RequestInterface | PHPUnit_Framework_TestCase */
+    /** @var  RequestInterface | PHPUnit_Framework_MockObject_MockObject */
     private $mockRequest;
 
     /** @var  \Closure */
     private $proceedClosure;
+
+    /** @var  AdapterInterface | PHPUnit_Framework_MockObject_MockObject */
+    private $mockConnection;
 
 
     public function __construct($name = null, array $data = array(), $dataName = '')
@@ -54,18 +57,23 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     public function setUp()
     {
         $this->mockResourceTimestampRespository = $this->getMockBuilder(ResourceModificationTimeRepository::class)
-            ->disableOriginalConstructor()->setMethods(['save', 'get'])->getMock();
+            ->disableOriginalConstructor()->setMethods([
+                'getLastModificationTime',
+                'updateModificationTime'
+            ])->getMock();
         $this->mockMagento2LockService = $this->getMockBuilder(LockService::class)
-            ->disableOriginalConstructor()->setMethods(['acquire', 'release'])->getMock();
+            ->disableOriginalConstructor()->setMethods(['acquireLock', 'releaseLock'])->getMock();
+        $this->mockConnection = $this->getMockForAbstractClass(AdapterInterface::class);
         $this->mockResourceConnection = $this->getMockBuilder(ResourceConnection::class)
-            ->disableOriginalConstructor()->getMock();
+            ->disableOriginalConstructor()->setMethods(['getConnection'])->getMock();
+        $this->mockResourceConnection->method('getConnection')->willReturn($this->mockConnection);
         $this->mockErrorProcessor = $this->getMockBuilder(ErrorProcessor::class)
             ->disableOriginalConstructor()->getMock();
         $this->mockResponse = $this->getMockBuilder(Response::class)
             ->disableOriginalConstructor()->getMock();
         $this->mockRequest = $this->getMockBuilder(Request::class)
             ->disableOriginalConstructor()->getMock();
-        $this->mockFrontController = $this->getMockBuilder(FrontControllerInterface::class)
+        $this->mockFrontController = $this->getMockBuilder(Rest::class)
             ->disableOriginalConstructor()->getMock();
         $this->proceedClosure = function () {
             return new Response();
@@ -74,11 +82,43 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function testWithNoResourceQuery()
     {
-        /** @var Request $request */
-        $request = $this->getMockRequest(new \DateTime(), new \DateTime());
-        $request->method('getHeader')->willReturn(null);
+        //should fallback an use path information as resource information
+        //in this scenario the lock will be acquired and released and we will begin and commit a transaction
 
+        $date = new \DateTime();
+        $ifUnModifiedDate = new \DateTime();
+        $ifUnModifiedDate->setTimestamp(strtotime('+1 day', \time()));
+        $request = $this->getMockRequest($date, $ifUnModifiedDate);
         $response = new Response();
+
+        $this->mockConnection->expects($this->once())->method('beginTransaction');
+        $this->mockConnection->expects($this->once())->method('commit');
+        $this->mockMagento2LockService->expects($this->once())->method('acquireLock')->willReturn(true);
+        $this->mockMagento2LockService->expects($this->once())->method('releaseLock')->willReturn(true);
+
+        $request->expects($this->once())->method('getPathInfo');
+        $plugin = $this->getPlugin($request, $response);
+        $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
+        $this->assertEquals(200, $response->getStatusCode());
+    }
+
+    public function testNewResourceRequest()
+    {
+        //A resource request that has no entry in the repository should expect a 200 and a new entry into the repository
+
+        $date = new \DateTime();
+        $ifUnModifiedDate = new \DateTime();
+        $ifUnModifiedDate->setTimestamp(strtotime('+1 day', \time()));
+        $request = $this->getMockRequest($date, $ifUnModifiedDate);
+        $response = new Response();
+
+        //As its a new resource request getLastModificationTime will null
+        $this->mockResourceTimestampRespository->method('getLastModificationTime')->willReturn(null);
+        $this->mockMagento2LockService->expects($this->once())->method('acquireLock')->willReturn(true);
+        $this->mockMagento2LockService->expects($this->once())->method('releaseLock')->willReturn(true);
+
+        $this->mockConnection->expects($this->once())->method('beginTransaction');
+        $this->mockConnection->expects($this->once())->method('commit');
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -86,46 +126,56 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     }
 
 
-    public function testWithOldAPIRequest()
+    public function testWithLateResourceRequest()
     {
-        $time = microtime(true);
-        //Scenario: The timestamp the previous for the resource is more recent than the timestamp in the request
-        $this->mockResourceTimestampRespository->method('get')
-            ->willReturn(['timestamp' => $time, 'identifier' => 'SnowIO-TestResource']);
-
-        /** @var Request $request */
-        $request = $this->getMockRequest(new \DateTime(), new \DateTime());
-
-        $request->method('getHeader')->will($this->returnValueMap(['SnowIO-Resource-Identifier', 'Resource'],
-            ['SnowIO-Resource-Timestamp', -$time]));
-
-        /** @var Response $response */
+        //scenario is that the ifUnmodifiedDate is older than the lastModified Timestamp located in the
+        //webapi resource table
+        $date = new \DateTime();
+        $date->setTimestamp(strtotime('-1 day', \time()));
+        $ifUnModifiedDate = new \DateTime();
+        $ifUnModifiedDate->setTimestamp(strtotime('-1 day', \time()));
+        $this->mockResourceTimestampRespository->method('getLastModificationTime')
+            ->willReturn(gmdate('D, d M Y H:i:s T'));
         $response = new Response();
+        $request = $this->getMockRequest($date, $ifUnModifiedDate);
 
+        //it will still acquire and release the lock
+        $this->mockMagento2LockService->expects($this->once())->method('acquireLock')->willReturn(true);
+        $this->mockMagento2LockService->expects($this->once())->method('releaseLock')->willReturn(true);
+
+        //it will NEVER begin, rollBack or commit a transaction
+        $this->mockConnection->expects($this->never())->method('beginTransaction');
+        $this->mockConnection->expects($this->never())->method('commit');
+        $this->mockConnection->expects($this->never())->method('rollBack');
+
+        //assert the updateModificationTime
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
         $this->assertEquals(412, $response->getStatusCode());
     }
 
 
-    public function testWithReadyAcquiredResource()
+    public function testRaceCondition()
     {
-        //Scenario: The lock has already been acquired by another webapi request on the needed resource
-        $this->mockMagento2LockService->method('acquire')->willReturn(false);
-
-        //Scenario: The timestamp the previous for the resource is more recent than the timestamp in the request
-        $this->mockResourceTimestampRespository->method('get')
-            ->willReturn(['timestamp' => microtime(true), 'identifier' => 'SnowIO-TestResource']);
-
-        /** @var Request $request */
-        $request = $this->getMockRequest(\time(), \time());
-
-        $request->method('getHeader')->will($this->returnValueMap(['SnowIO-Resource-Identifier', 'Resource'],
-            ['SnowIO-Resource-Timestamp', microtime(true)]));
-
-        /** @var Response $response */
+        $date = new \DateTime();
+        $date->setTimestamp(strtotime('+1 day', \time()));
+        $ifUnModifiedDate = new \DateTime();
+        $ifUnModifiedDate->setTimestamp(strtotime('+1 day', \time()));
+        $this->mockResourceTimestampRespository->method('getLastModificationTime')
+            ->willReturn(gmdate('D, d M Y H:i:s T'));
         $response = new Response();
+        $request = $this->getMockRequest($date, $ifUnModifiedDate);
 
+        //simulate race condition (as one resource has already acquired the lock )
+        $this->mockMagento2LockService->expects($this->once())->method('acquireLock')->willReturn(false);
+
+        //it will NEVER begin, rollBack or commit a transaction and also release the lock
+        $this->mockConnection->expects($this->never())->method('beginTransaction');
+        $this->mockConnection->expects($this->never())->method('commit');
+        $this->mockConnection->expects($this->never())->method('rollBack');
+        $this->mockMagento2LockService->expects($this->never())->method('releaseLock');
+
+        //assert the updateModificationTime
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
         $this->assertEquals(409, $response->getStatusCode());
@@ -146,21 +196,27 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     /**
      * @return Request | PHPUnit_Framework_MockObject_MockObject
      */
-    private function getMockRequest($inputDate, $inputIfUnmodifiedSinceDate)
+    private function getMockRequest(\DateTime $inputDate, \DateTime $inputIfUnmodifiedSinceDate)
     {
         $date = new Date();
         $date->setDate($inputDate);
         $ifModifiedSince = new IfUnmodifiedSince();
         $ifModifiedSince->setDate($inputIfUnmodifiedSinceDate);
         $request = $this->getMockBuilder(Request::class)->disableOriginalConstructor()
-            ->setMethods(['getHeader'])->getMock();
+            ->setMethods(['getHeader', 'getPathInfo'])->getMock();
         $request->method('getHeader')->will($this->returnValueMap([
-            'Date',
-            new Date()
-        ], [
-            'If-Unmodified-Since',
-            new IfUnmodifiedSince()
+            [
+                'Date',
+                false,
+                $date
+            ],
+            [
+                'If-Unmodified-Since',
+                false,
+                $ifModifiedSince
+            ]
         ]));
+        $request->method('getPathInfo')->willReturn('rest/V1/foo/bar');
         return $request;
     }
 }
