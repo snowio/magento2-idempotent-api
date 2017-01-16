@@ -1,15 +1,17 @@
 <?php
 namespace SnowIO\IdempotentAPI\Model;
 
-use Braintree\Exception;
-use Magento\Framework\App\FrontControllerInterface;
 use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\App\ResponseInterface;
+use Magento\Framework\Phrase;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
 use Magento\Framework\Webapi\Response;
+use Magento\Framework\Webapi\Rest\Response as RestResponse;
 use Magento\Webapi\Controller\Rest;
 use Magento\Webapi\Controller\Soap;
 use SnowIO\Lock\Api\LockService;
+use Magento\Framework\Webapi\Exception as WebapiException;
 
 class DispatchPlugin
 {
@@ -46,8 +48,8 @@ class DispatchPlugin
         }
 
         $resourceId = $this->request->getParam('resource');
-        $lastModificationTimeExpectation = $this->request->getHeader('If-Unmodified-Since')->getFieldValue();
-        $newModificationTime = $this->request->getHeader('Date')->getFieldValue();
+        $lastModificationTimeExpectation = $this->request->getHeader('If-Unmodified-Since');
+        $newModificationTime = $this->request->getHeader('Date');
 
         if (!$resourceId && !$lastModificationTimeExpectation && !$newModificationTime) {
             return $proceed($request);
@@ -57,7 +59,7 @@ class DispatchPlugin
             $resourceId = $this->request->getPathInfo();
         }
 
-         if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
+        if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
             $this->response->setStatusCode(409);
             return $this->response;
         }
@@ -81,10 +83,25 @@ class DispatchPlugin
             $connection->beginTransaction();
 
             try {
-                $result = $proceed($request);
+                /** @var ResponseInterface $response */
+                $response = $proceed($request);
+
+                if ($response instanceof RestResponse && $response->isException()) {
+                    throw end($response->getException());
+                } elseif ($response instanceof Response && $response->getHttpResponseCode() >= 400) {
+                    throw new WebapiException(
+                        new Phrase($response->getBody()),
+                        $response->getHttpResponseCode(),
+                        $response->getHttpResponseCode(),
+                        [],
+                        '',
+                        null,
+                        null
+                    );
+                }
                 $this->modificationTimeRepo->updateModificationTime($resourceId, $updateTimestamp, $lastModificationTime);
                 $connection->commit();
-                return $result;
+                return $response;
             } catch (\Throwable $e) {
                 $connection->rollBack();
                 throw $e;
@@ -101,13 +118,13 @@ class DispatchPlugin
         }
     }
 
-    private function convertDateToTimestamp(string $date) : string
+    private function convertDateToTimestamp(string $date) : int
     {
-        return (string) strtotime($date);
+        return strtotime($date);
     }
 
-    private function isUnmodifiedSince(string $modificationTime, string $expectedTime)
+    private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
     {
-        return strtotime($modificationTime) < strtotime($expectedTime);
+        return $modificationTime < $expectedTime;
     }
 }

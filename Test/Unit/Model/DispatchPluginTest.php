@@ -135,7 +135,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $ifUnModifiedDate = new \DateTime();
         $ifUnModifiedDate->setTimestamp(strtotime('-1 day', \time()));
         $this->mockResourceTimestampRespository->method('getLastModificationTime')
-            ->willReturn(gmdate('D, d M Y H:i:s T'));
+            ->willReturn(\time());
         $response = new Response();
         $request = $this->getMockRequest($date, $ifUnModifiedDate);
 
@@ -155,7 +155,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     }
 
 
-    public function testRaceCondition()
+    public function testFailedAcquire()
     {
         $date = new \DateTime();
         $date->setTimestamp(strtotime('+1 day', \time()));
