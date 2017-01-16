@@ -4,22 +4,23 @@ namespace SnowIO\IdempotentAPI\Test\Unit\Model;
 
 use Magento\Framework\App\FrontControllerInterface;
 use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\TestFramework\Unit\Helper\ObjectManager;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
 use PHPUnit_Framework_MockObject_MockObject;
 use PHPUnit_Framework_TestCase;
 use SnowIO\IdempotentAPI\Model\DispatchPlugin;
-use SnowIO\IdempotentAPI\Model\ResourceTimestampRepository;
+use SnowIO\IdempotentAPI\Model\ResourceModificationTimeRepository;
 use SnowIO\Lock\Api\LockService;
 use Magento\Framework\Webapi\Response;
 use \Magento\Framework\App\RequestInterface;
-use Zend\Http\Headers;
+use Zend\Http\Header\Date;
+use Zend\Http\Header\HeaderInterface;
+use Zend\Http\Header\IfUnmodifiedSince;
 
 
 class DispatchPluginTest extends PHPUnit_Framework_TestCase
 {
-    /** @var  ResourceTimestampRepository | PHPUnit_Framework_MockObject_MockObject */
+    /** @var  ResourceModificationTimeRepository | PHPUnit_Framework_MockObject_MockObject */
     private $mockResourceTimestampRespository;
 
     /** @var  LockService | PHPUnit_Framework_MockObject_MockObject */
@@ -43,9 +44,6 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
     /** @var  \Closure */
     private $proceedClosure;
 
-    /** @var \Magento\Framework\TestFramework\Unit\Helper\ObjectManager */
-    private $objectManager;
-
 
     public function __construct($name = null, array $data = array(), $dataName = '')
     {
@@ -55,11 +53,10 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function setUp()
     {
-        $this->objectManager  = new ObjectManager($this);
-        $this->mockResourceTimestampRespository = $this->getMockBuilder(ResourceTimestampRepository::class)
+        $this->mockResourceTimestampRespository = $this->getMockBuilder(ResourceModificationTimeRepository::class)
             ->disableOriginalConstructor()->setMethods(['save', 'get'])->getMock();
         $this->mockMagento2LockService = $this->getMockBuilder(LockService::class)
-            ->disableOriginalConstructor()->setMethods(['acquire', 'release']);
+            ->disableOriginalConstructor()->setMethods(['acquire', 'release'])->getMock();
         $this->mockResourceConnection = $this->getMockBuilder(ResourceConnection::class)
             ->disableOriginalConstructor()->getMock();
         $this->mockErrorProcessor = $this->getMockBuilder(ErrorProcessor::class)
@@ -70,59 +67,40 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
             ->disableOriginalConstructor()->getMock();
         $this->mockFrontController = $this->getMockBuilder(FrontControllerInterface::class)
             ->disableOriginalConstructor()->getMock();
-
+        $this->proceedClosure = function () {
+            return new Response();
+        };
     }
 
-    public function testWithNoId()
+    public function testWithNoResourceQuery()
     {
         /** @var Request $request */
-        $request = $this->objectManager->getObject(Request::class);
+        $request = $this->getMockRequest(new \DateTime(), new \DateTime());
+        $request->method('getHeader')->willReturn(null);
 
-        $headers = (new Headers())
-            ->addHeaderLine("ACME-Resource-Identifier", "NonResource");
-        $request->setHeaders($headers);
-
-        /** @var Response $response */
-        $response = $this->objectManager->getObject(Response::class);
+        $response = new Response();
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
-        $this->assertEquals(400, $response->getStatusCode());
+        $this->assertEquals(200, $response->getStatusCode());
     }
 
-    public function testWithNoTimestamp()
-    {
-        /** @var Request $request */
-        $request = $this->objectManager->getObject(Request::class);
-
-        $headers = (new Headers())
-            ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource");
-        $request->setHeaders($headers);
-
-        /** @var Response $response */
-        $response = $this->objectManager->getObject(Response::class);
-
-        $plugin = $this->getPlugin($request, $response);
-        $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
-        $this->assertEquals(400, $response->getStatusCode());
-    }
 
     public function testWithOldAPIRequest()
     {
+        $time = microtime(true);
         //Scenario: The timestamp the previous for the resource is more recent than the timestamp in the request
         $this->mockResourceTimestampRespository->method('get')
-            ->willReturn(['timestamp' => microtime(true), 'identifier' => 'SnowIO-TestResource']);
+            ->willReturn(['timestamp' => $time, 'identifier' => 'SnowIO-TestResource']);
 
         /** @var Request $request */
-        $request = $this->objectManager->getObject(Request::class);
+        $request = $this->getMockRequest(new \DateTime(), new \DateTime());
 
-        $headers = (new Headers())
-            ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource")
-            ->addHeaderLine("SnowIO-Resource-Timestamp", microtime(true) - 1000);
-        $request->setHeaders($headers);
+        $request->method('getHeader')->will($this->returnValueMap(['SnowIO-Resource-Identifier', 'Resource'],
+            ['SnowIO-Resource-Timestamp', -$time]));
 
         /** @var Response $response */
-        $response = $this->objectManager->getObject(Response::class);
+        $response = new Response();
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -135,16 +113,18 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         //Scenario: The lock has already been acquired by another webapi request on the needed resource
         $this->mockMagento2LockService->method('acquire')->willReturn(false);
 
-        /** @var Request $request */
-        $request = $this->objectManager->getObject(Request::class);
+        //Scenario: The timestamp the previous for the resource is more recent than the timestamp in the request
+        $this->mockResourceTimestampRespository->method('get')
+            ->willReturn(['timestamp' => microtime(true), 'identifier' => 'SnowIO-TestResource']);
 
-        $headers = (new Headers())
-            ->addHeaderLine("SnowIO-Resource-Identifier", "SnowIO-TestResource")
-            ->addHeaderLine("SnowIO-Resource-Timestamp", microtime(true));
-        $request->setHeaders($headers);
+        /** @var Request $request */
+        $request = $this->getMockRequest(\time(), \time());
+
+        $request->method('getHeader')->will($this->returnValueMap(['SnowIO-Resource-Identifier', 'Resource'],
+            ['SnowIO-Resource-Timestamp', microtime(true)]));
 
         /** @var Response $response */
-        $response = $this->objectManager->getObject(Response::class);
+        $response = new Response();
 
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
@@ -163,4 +143,24 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         );
     }
 
+    /**
+     * @return Request | PHPUnit_Framework_MockObject_MockObject
+     */
+    private function getMockRequest($inputDate, $inputIfUnmodifiedSinceDate)
+    {
+        $date = new Date();
+        $date->setDate($inputDate);
+        $ifModifiedSince = new IfUnmodifiedSince();
+        $ifModifiedSince->setDate($inputIfUnmodifiedSinceDate);
+        $request = $this->getMockBuilder(Request::class)->disableOriginalConstructor()
+            ->setMethods(['getHeader'])->getMock();
+        $request->method('getHeader')->will($this->returnValueMap([
+            'Date',
+            new Date()
+        ], [
+            'If-Unmodified-Since',
+            new IfUnmodifiedSince()
+        ]));
+        return $request;
+    }
 }

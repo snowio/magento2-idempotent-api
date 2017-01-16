@@ -22,7 +22,7 @@ class InstallSchema implements InstallSchemaInterface
         $installer = $setup;
         $installer->startSetup();
         $table = $installer->getConnection()->newTable(
-            $installer->getTable('webapi_resource_timestamp')
+            $installer->getTable('webapi_resource_modification_log')
         )->addColumn(
             'identifier',
             Table::TYPE_TEXT,
@@ -31,7 +31,7 @@ class InstallSchema implements InstallSchemaInterface
             'Resource Identifier'
         )->addColumn(
             'timestamp',
-            Table::TYPE_FLOAT,
+            Table::TYPE_DECIMAL,
             null,
             ['unsigned' => true, 'nullable' => false],
             'Timestamp'
