@@ -2,7 +2,6 @@
 namespace SnowIO\IdempotentAPI\Model;
 
 use Magento\Framework\App\ResourceConnection;
-use Magento\Framework\App\ResponseInterface;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
 use Magento\Framework\Webapi\Response;
@@ -78,7 +77,6 @@ class DispatchPlugin
             $connection->beginTransaction();
 
             try {
-                /** @var ResponseInterface $response */
                 $response = $proceed($request);
 
                 if (($response instanceof RestResponse && $response->isException())
@@ -108,7 +106,6 @@ class DispatchPlugin
             return $this->response;
         } finally {
             $this->lockService->releaseLock("idempotent_api.$resourceId");
-            return $this->response;
         }
     }
 
