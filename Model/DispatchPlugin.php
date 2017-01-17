@@ -49,12 +49,8 @@ class DispatchPlugin
         $lastModificationTimeExpectation = $this->request->getHeader('If-Unmodified-Since');
         $newModificationTime = $this->request->getHeader('Date');
 
-        if (!$resourceId && !$lastModificationTimeExpectation && !$newModificationTime) {
+        if (!$resourceId) {
             return $proceed($request);
-        }
-
-        if (!isset($resourceId)) {
-            $resourceId = $this->request->getPathInfo();
         }
 
         if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
