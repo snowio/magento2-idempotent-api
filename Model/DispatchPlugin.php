@@ -3,7 +3,6 @@ namespace SnowIO\IdempotentAPI\Model;
 
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\App\ResponseInterface;
-use Magento\Framework\Phrase;
 use Magento\Framework\Webapi\ErrorProcessor;
 use Magento\Framework\Webapi\Request;
 use Magento\Framework\Webapi\Response;
@@ -11,7 +10,6 @@ use Magento\Framework\Webapi\Rest\Response as RestResponse;
 use Magento\Webapi\Controller\Rest;
 use Magento\Webapi\Controller\Soap;
 use SnowIO\Lock\Api\LockService;
-use Magento\Framework\Webapi\Exception as WebapiException;
 
 class DispatchPlugin
 {
@@ -86,18 +84,10 @@ class DispatchPlugin
                 /** @var ResponseInterface $response */
                 $response = $proceed($request);
 
-                if ($response instanceof RestResponse && $response->isException()) {
-                    throw end($response->getException());
-                } elseif ($response instanceof Response && $response->getHttpResponseCode() >= 400) {
-                    throw new WebapiException(
-                        new Phrase($response->getBody()),
-                        $response->getHttpResponseCode(),
-                        $response->getHttpResponseCode(),
-                        [],
-                        '',
-                        null,
-                        null
-                    );
+                if (($response instanceof RestResponse && $response->isException())
+                    || ($response instanceof Response && $response->getHttpResponseCode() >= 400)) {
+                    $connection->rollBack();
+                    return $response;
                 }
                 $this->modificationTimeRepo->updateModificationTime($resourceId, $updateTimestamp, $lastModificationTime);
                 $connection->commit();
@@ -115,6 +105,7 @@ class DispatchPlugin
             return $this->response;
         } finally {
             $this->lockService->releaseLock("idempotent_api.$resourceId");
+            return $this->response;
         }
     }
 
