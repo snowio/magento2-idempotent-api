@@ -63,7 +63,8 @@ class DispatchPlugin
         }
 
         try {
-            if (isset($lastModificationTimeExpectation) && $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($resourceId)) {
+            if (isset($lastModificationTimeExpectation) &&
+                $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($resourceId)) {
                 $timestampForCondition = $this->convertDateToTimestamp($lastModificationTimeExpectation);
                 if (!$this->isUnmodifiedSince($lastModificationTime, $timestampForCondition)) {
                     $this->response->setStatusCode(412);
@@ -85,11 +86,17 @@ class DispatchPlugin
                 $response = $proceed($request);
 
                 if (($response instanceof RestResponse && $response->isException())
-                    || ($response instanceof Response && $response->getHttpResponseCode() >= 400)) {
+                    || ($response instanceof Response && $response->getHttpResponseCode() >= 400)
+                ) {
                     $connection->rollBack();
                     return $response;
                 }
-                $this->modificationTimeRepo->updateModificationTime($resourceId, $updateTimestamp, $lastModificationTime);
+
+                $this->modificationTimeRepo->updateModificationTime(
+                    $resourceId,
+                    $updateTimestamp,
+                    $lastModificationTime
+                );
                 $connection->commit();
                 return $response;
             } catch (\Throwable $e) {

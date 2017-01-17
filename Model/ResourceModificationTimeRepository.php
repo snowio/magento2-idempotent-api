@@ -24,21 +24,27 @@ class ResourceModificationTimeRepository
         return $result ? (int) $result : null;
     }
 
-    public function updateModificationTime(string $identifier, string $modificationTime, string $expectedModificationTime = null)
-    {
+    public function updateModificationTime(
+        string $identifier,
+        string $modificationTime,
+        string $expectedModificationTime = null
+    ) {
         $identifier = md5($identifier);
 
         if ($expectedModificationTime !== null) {
-            $rowsAffected = $this->dbConnection->update($this->dbConnection->getTableName('webapi_resource_modification_log'),
+            $rowsAffected = $this->dbConnection->update(
+                $this->dbConnection->getTableName('webapi_resource_modification_log'),
                 [
                     'timestamp' => $modificationTime
-
-                ], ['identifier = ?' => $identifier, 'timestamp = ?' => $expectedModificationTime]);
+                ],
+                ['identifier = ?' => $identifier, 'timestamp = ?' => $expectedModificationTime]
+            );
         } else {
             //new resource that has never been modified
-            $rowsAffected = $this->dbConnection->insert($this->dbConnection->getTableName('webapi_resource_modification_log'),[
-                'identifier' => $identifier, 'timestamp' => $modificationTime
-            ]);
+            $rowsAffected = $this->dbConnection->insert(
+                $this->dbConnection->getTableName('webapi_resource_modification_log'),
+                ['identifier' => $identifier, 'timestamp' => $modificationTime]
+            );
         }
 
         if ($rowsAffected === 0) {
