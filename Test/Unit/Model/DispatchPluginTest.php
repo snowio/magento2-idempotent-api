@@ -82,9 +82,6 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function testWithNoResourceQuery()
     {
-        //should fallback an use path information as resource information
-        //in this scenario the lock will be acquired and released and we will begin and commit a transaction
-
         $date = new \DateTime();
         $ifUnModifiedDate = new \DateTime();
         $ifUnModifiedDate->setTimestamp(strtotime('+1 day', \time()));
@@ -96,7 +93,6 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $this->mockMagento2LockService->expects($this->once())->method('acquireLock')->willReturn(true);
         $this->mockMagento2LockService->expects($this->once())->method('releaseLock')->willReturn(true);
 
-        $request->expects($this->once())->method('getPathInfo');
         $plugin = $this->getPlugin($request, $response);
         $response = $plugin->aroundDispatch($this->mockFrontController, $this->proceedClosure, $this->mockRequest);
         $this->assertEquals(200, $response->getStatusCode());
@@ -203,7 +199,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
         $ifModifiedSince = new IfUnmodifiedSince();
         $ifModifiedSince->setDate($inputIfUnmodifiedSinceDate);
         $request = $this->getMockBuilder(Request::class)->disableOriginalConstructor()
-            ->setMethods(['getHeader', 'getPathInfo'])->getMock();
+            ->setMethods(['getHeader', 'getParam'])->getMock();
         $request->method('getHeader')->will($this->returnValueMap([
             [
                 'Date',
@@ -216,7 +212,11 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
                 $ifModifiedSince
             ]
         ]));
-        $request->method('getPathInfo')->willReturn('rest/V1/foo/bar');
+        $request->method('getParam')->will($this->returnValueMap([[
+            'resource',
+             null,
+            'testReturnResource'
+        ]]));
         return $request;
     }
 }
