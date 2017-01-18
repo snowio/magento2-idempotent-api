@@ -116,6 +116,6 @@ class DispatchPlugin
 
     private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
     {
-        return $modificationTime < $expectedTime;
+        return $modificationTime <= $expectedTime;
     }
 }
