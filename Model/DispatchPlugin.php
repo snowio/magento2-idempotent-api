@@ -44,10 +44,10 @@ class DispatchPlugin
             return $proceed($request);
         }
 
-        $messageGroupId = $this->request->getHeader('X-Message-Group-ID', null);
-        $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', null);
+        $messageGroupId = $this->request->getHeader('X-Message-Group-ID', $default = false);
+        $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', $default = false);
 
-        if (!isset($messageGroupId)) {
+        if ($messageGroupId === false) {
             return $proceed($request);
         }
 
@@ -57,7 +57,7 @@ class DispatchPlugin
         }
 
         try {
-            if (isset($messageTimestamp) &&
+            if ($messageTimestamp !== false &&
                 $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($messageGroupId)
             ) {
                 if (!$this->isUnmodifiedSince($lastModificationTime, $messageTimestamp)) {
