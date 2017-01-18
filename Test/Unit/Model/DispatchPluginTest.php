@@ -82,9 +82,6 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function testWithNoResourceQuery()
     {
-        //should fallback an use path information as resource information
-        //in this scenario the lock will be acquired and released and we will begin and commit a transaction
-
         $date = new \DateTime();
         $ifUnModifiedDate = new \DateTime();
         $ifUnModifiedDate->setTimestamp(strtotime('+1 day', \time()));
