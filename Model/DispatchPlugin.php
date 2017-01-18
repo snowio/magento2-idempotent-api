@@ -44,7 +44,7 @@ class DispatchPlugin
             return $proceed($request);
         }
 
-        $messageGroupId = $this->request->getHeader('X-Message-Group-Id', null);
+        $messageGroupId = $this->request->getHeader('X-Message-Group-ID', null);
         $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', null);
 
         if (!isset($messageGroupId)) {
