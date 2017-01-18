@@ -47,7 +47,7 @@ class ResourceModificationTimeRepository
             );
         }
 
-        if ($rowsAffected === 0) {
+        if ($rowsAffected === 0 && ($modificationTime !== $expectedModificationTime)) {
             throw new \RuntimeException('There has been a conflict updating the web api resource');
         }
     }
