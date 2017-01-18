@@ -57,17 +57,18 @@ class DispatchPlugin
         }
 
         try {
-            if ($messageTimestamp !== false &&
-                $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($messageGroupId)
-            ) {
-                if (!$this->isUnmodifiedSince($lastModificationTime, $messageTimestamp)) {
+            $lastModification = $this->modificationTimeRepo->getLastModification($messageGroupId);
+            $lastModificationTime = $lastModification['timestamp'] ?? null;
+            $lastVersion = $lastModification['version'] ?? null;
+
+            if ($messageTimestamp !== false) {
+                if ($lastModificationTime !== null && $messageTimestamp < $lastModificationTime) {
                     $this->response->setStatusCode(412);
                     return $this->response;
                 }
-                $updateTimestamp = $messageTimestamp;
+                $currentTimestamp = $messageTimestamp;
             } else {
-                $lastModificationTime = null;
-                $updateTimestamp = \time();
+                $currentTimestamp = \time();
             }
 
             $connection = $this->resourceConnection->getConnection();
@@ -85,7 +86,8 @@ class DispatchPlugin
 
                 $this->modificationTimeRepo->updateModificationTime(
                     $messageGroupId,
-                    $updateTimestamp,
+                    $currentTimestamp,
+                    $lastVersion,
                     $lastModificationTime
                 );
                 $connection->commit();
@@ -94,6 +96,9 @@ class DispatchPlugin
                 $connection->rollBack();
                 throw $e;
             }
+        } catch (ConflictException $e) {
+            $this->response->setStatusCode(409);
+            return $this->response;
         } catch (\Exception $e) {
             $e = $this->errorProcessor->maskException($e);
             $this->response->setStatusCode($e->getHttpCode());
@@ -104,10 +109,5 @@ class DispatchPlugin
         } finally {
             $this->lockService->releaseLock("idempotent_api.$messageGroupId");
         }
-    }
-
-    private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
-    {
-        return $modificationTime <= $expectedTime;
     }
 }

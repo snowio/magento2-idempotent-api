@@ -31,10 +31,16 @@ class InstallSchema implements InstallSchemaInterface
             'Resource Identifier'
         )->addColumn(
             'timestamp',
-            Table::TYPE_DECIMAL,
-            null,
+            Table::TYPE_TEXT,
+            255,
             ['unsigned' => true, 'nullable' => false],
             'Timestamp'
+        )->addColumn(
+            'version',
+            Table::TYPE_INTEGER,
+            255,
+            ['unsigned' => true, 'nullable' => false, 'default' => 1],
+            'Version'
         );
         $installer->getConnection()->createTable($table);
         $installer->endSetup();

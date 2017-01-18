@@ -13,20 +13,21 @@ class ResourceModificationTimeRepository
         $this->dbConnection = $dbContext->getResources()->getConnection($connectionName);
     }
 
-    public function getLastModificationTime(string $identifier)
+    public function getLastModification(string $identifier)
     {
         $identifier = md5($identifier);
         $select = $this->dbConnection->select()
-            ->from(['t' => $this->dbConnection->getTableName('webapi_resource_modification_log')], 'timestamp')
+            ->from(['t' => $this->dbConnection->getTableName('webapi_resource_modification_log')], ['timestamp', 'version'])
             ->where('t.identifier = ?', $identifier);
-        $result = $this->dbConnection->fetchOne($select);
+        $result = $this->dbConnection->fetchAssoc($select);
 
-        return $result ? (int) $result : null;
+        return array_shift($result);
     }
 
     public function updateModificationTime(
         string $identifier,
         string $modificationTime,
+        int $expectedVersion = null,
         string $expectedModificationTime = null
     ) {
         $identifier = md5($identifier);
@@ -35,20 +36,20 @@ class ResourceModificationTimeRepository
             $rowsAffected = $this->dbConnection->update(
                 $this->dbConnection->getTableName('webapi_resource_modification_log'),
                 [
-                    'timestamp' => $modificationTime
+                    'timestamp' => $modificationTime,
+                    'version' => $expectedVersion + 1
                 ],
-                ['identifier = ?' => $identifier, 'timestamp = ?' => $expectedModificationTime]
+                ['identifier = ?' => $identifier, 'timestamp = ?' => $expectedModificationTime, 'version = ?' => $expectedVersion]
             );
         } else {
-            //new resource that has never been modified
             $rowsAffected = $this->dbConnection->insert(
                 $this->dbConnection->getTableName('webapi_resource_modification_log'),
-                ['identifier' => $identifier, 'timestamp' => $modificationTime]
+                ['identifier' => $identifier, 'timestamp' => $modificationTime, 'version' => 1]
             );
         }
 
-        if ($rowsAffected === 0 && ($modificationTime !== $expectedModificationTime)) {
-            throw new \RuntimeException('There has been a conflict updating the web api resource');
+        if ($rowsAffected === 0) {
+            throw new ConflictException;
         }
     }
 }
