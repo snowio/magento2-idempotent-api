@@ -44,32 +44,29 @@ class DispatchPlugin
             return $proceed($request);
         }
 
-        $resourceId = $this->request->getParam('resource');
-        $lastModificationTimeExpectation = $this->request->getHeader('If-Unmodified-Since');
-        $newModificationTime = $this->request->getHeader('Date');
+        $messageGroupId = $this->request->getHeader('X-Message-Group-Id', null);
+        $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', null);
 
-        if (!$resourceId) {
+        if (!isset($messageGroupId)) {
             return $proceed($request);
         }
 
-        if (!$this->lockService->acquireLock("idempotent_api.$resourceId", $timeout = 0)) {
+        if (!$this->lockService->acquireLock("idempotent_api.$messageGroupId", $timeout = 0)) {
             $this->response->setStatusCode(409);
             return $this->response;
         }
 
         try {
-            if (isset($lastModificationTimeExpectation) &&
-                $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($resourceId)) {
-                $timestampForCondition = $this->convertDateToTimestamp($lastModificationTimeExpectation);
-                if (!$this->isUnmodifiedSince($lastModificationTime, $timestampForCondition)) {
+            if (isset($messageTimestamp) &&
+                $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($messageGroupId)
+            ) {
+                if (!$this->isUnmodifiedSince($lastModificationTime, $messageTimestamp)) {
                     $this->response->setStatusCode(412);
                     return $this->response;
                 }
-            }
-
-            if (isset($newModificationTime)) {
-                $updateTimestamp = $this->convertDateToTimestamp($newModificationTime);
+                $updateTimestamp = $messageTimestamp;
             } else {
+                $lastModificationTime = null;
                 $updateTimestamp = \time();
             }
 
@@ -87,7 +84,7 @@ class DispatchPlugin
                 }
 
                 $this->modificationTimeRepo->updateModificationTime(
-                    $resourceId,
+                    $messageGroupId,
                     $updateTimestamp,
                     $lastModificationTime
                 );
@@ -105,13 +102,8 @@ class DispatchPlugin
             $this->response->setStatusCode(500);
             return $this->response;
         } finally {
-            $this->lockService->releaseLock("idempotent_api.$resourceId");
+            $this->lockService->releaseLock("idempotent_api.$messageGroupId");
         }
-    }
-
-    private function convertDateToTimestamp(string $date) : int
-    {
-        return strtotime($date);
     }
 
     private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
