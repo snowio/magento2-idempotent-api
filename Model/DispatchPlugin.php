@@ -47,7 +47,7 @@ class DispatchPlugin
         $messageGroupId = $this->request->getHeader('X-Message-Group-ID', $default = false);
         $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', $default = false);
 
-        if ($messageGroupId === false) {
+        if ($messageGroupId === false || $messageTimestamp === false) {
             return $proceed($request);
         }
 
@@ -61,14 +61,9 @@ class DispatchPlugin
             $lastModificationTime = $lastModification['timestamp'] ?? null;
             $lastVersion = $lastModification['version'] ?? null;
 
-            if ($messageTimestamp !== false) {
-                if ($lastModificationTime !== null && $messageTimestamp < $lastModificationTime) {
-                    $this->response->setStatusCode(412);
-                    return $this->response;
-                }
-                $currentTimestamp = $messageTimestamp;
-            } else {
-                $currentTimestamp = \time();
+            if ($lastModificationTime !== null && $messageTimestamp < $lastModificationTime) {
+                $this->response->setStatusCode(412);
+                return $this->response;
             }
 
             $connection = $this->resourceConnection->getConnection();
@@ -86,7 +81,7 @@ class DispatchPlugin
 
                 $this->modificationTimeRepo->updateModificationTime(
                     $messageGroupId,
-                    $currentTimestamp,
+                    $messageTimestamp,
                     $lastVersion,
                     $lastModificationTime
                 );
