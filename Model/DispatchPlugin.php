@@ -16,7 +16,7 @@ class DispatchPlugin
     private $response;
     private $lockService;
     private $resourceConnection;
-    private $modificationTimeRepo;
+    private $messageGroupRepository;
     private $errorProcessor;
 
     public function __construct(
@@ -24,14 +24,14 @@ class DispatchPlugin
         Response $response,
         LockService $lockService,
         ResourceConnection $resourceConnection,
-        ResourceModificationTimeRepository $resourceTimestampRepository,
+        WebApiMessageGroupRepository $messageGroupRepository,
         ErrorProcessor $errorProcessor
     ) {
         $this->request = $request;
         $this->response = $response;
         $this->lockService = $lockService;
         $this->resourceConnection = $resourceConnection;
-        $this->modificationTimeRepo = $resourceTimestampRepository;
+        $this->messageGroupRepository = $messageGroupRepository;
         $this->errorProcessor = $errorProcessor;
     }
 
@@ -57,11 +57,11 @@ class DispatchPlugin
         }
 
         try {
-            $lastModification = $this->modificationTimeRepo->getLastModification($messageGroupId);
-            $lastModificationTime = $lastModification['timestamp'] ?? null;
-            $lastVersion = $lastModification['version'] ?? null;
+            $messageGroup = $this->messageGroupRepository->getMessageGroup($messageGroupId);
+            $lastTimestamp = $messageGroup['timestamp'] ?? null;
+            $lastVersion = $messageGroup['version'] ?? null;
 
-            if ($lastModificationTime !== null && $messageTimestamp < $lastModificationTime) {
+            if ($lastTimestamp !== null && $messageTimestamp < $lastTimestamp) {
                 $this->response->setStatusCode(412);
                 return $this->response;
             }
@@ -79,11 +79,11 @@ class DispatchPlugin
                     return $response;
                 }
 
-                $this->modificationTimeRepo->updateModificationTime(
+                $this->messageGroupRepository->updateModificationTime(
                     $messageGroupId,
                     $messageTimestamp,
                     $lastVersion,
-                    $lastModificationTime
+                    $lastTimestamp
                 );
                 $connection->commit();
                 return $response;

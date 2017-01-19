@@ -4,7 +4,7 @@ namespace SnowIO\IdempotentAPI\Model;
 
 use Magento\Framework\Model\ResourceModel\Db\Context;
 
-class ResourceModificationTimeRepository
+class WebApiMessageGroupRepository
 {
     private $dbConnection;
 
@@ -13,38 +13,38 @@ class ResourceModificationTimeRepository
         $this->dbConnection = $dbContext->getResources()->getConnection($connectionName);
     }
 
-    public function getLastModification(string $identifier)
+    public function getMessageGroup(string $id)
     {
-        $identifier = md5($identifier);
+        $id = md5($id);
         $select = $this->dbConnection->select()
-            ->from(['t' => $this->dbConnection->getTableName('webapi_resource_modification_log')], ['timestamp', 'version'])
-            ->where('t.identifier = ?', $identifier);
+            ->from(['t' => $this->dbConnection->getTableName('webapi_message_group')], ['timestamp', 'version'])
+            ->where('t.id = ?', $id);
         $result = $this->dbConnection->fetchAssoc($select);
 
         return array_shift($result);
     }
 
     public function updateModificationTime(
-        string $identifier,
+        string $id,
         string $modificationTime,
         int $expectedVersion = null,
         string $expectedModificationTime = null
     ) {
-        $identifier = md5($identifier);
+        $id = md5($id);
 
         if ($expectedModificationTime !== null) {
             $rowsAffected = $this->dbConnection->update(
-                $this->dbConnection->getTableName('webapi_resource_modification_log'),
+                $this->dbConnection->getTableName('webapi_message_group'),
                 [
                     'timestamp' => $modificationTime,
                     'version' => $expectedVersion + 1
                 ],
-                ['identifier = ?' => $identifier, 'timestamp = ?' => $expectedModificationTime, 'version = ?' => $expectedVersion]
+                ['id = ?' => $id, 'timestamp = ?' => $expectedModificationTime, 'version = ?' => $expectedVersion]
             );
         } else {
             $rowsAffected = $this->dbConnection->insert(
-                $this->dbConnection->getTableName('webapi_resource_modification_log'),
-                ['identifier' => $identifier, 'timestamp' => $modificationTime, 'version' => 1]
+                $this->dbConnection->getTableName('webapi_message_group'),
+                ['id' => $id, 'timestamp' => $modificationTime, 'version' => 1]
             );
         }
 
