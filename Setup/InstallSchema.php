@@ -22,19 +22,25 @@ class InstallSchema implements InstallSchemaInterface
         $installer = $setup;
         $installer->startSetup();
         $table = $installer->getConnection()->newTable(
-            $installer->getTable('webapi_resource_modification_log')
+            $installer->getTable('webapi_message_group')
         )->addColumn(
-            'identifier',
+            'id',
             Table::TYPE_TEXT,
             255,
             ['primary' => true, 'nullable' => false],
-            'Resource Identifier'
+            'Message Group ID'
         )->addColumn(
             'timestamp',
-            Table::TYPE_DECIMAL,
-            null,
+            Table::TYPE_TEXT,
+            255,
             ['unsigned' => true, 'nullable' => false],
-            'Timestamp'
+            'Message Timestamp'
+        )->addColumn(
+            'version',
+            Table::TYPE_INTEGER,
+            255,
+            ['unsigned' => true, 'nullable' => false, 'default' => 1],
+            'Version'
         );
         $installer->getConnection()->createTable($table);
         $installer->endSetup();

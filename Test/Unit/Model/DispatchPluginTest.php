@@ -11,7 +11,7 @@ use Magento\Webapi\Controller\Rest;
 use PHPUnit_Framework_MockObject_MockObject;
 use PHPUnit_Framework_TestCase;
 use SnowIO\IdempotentAPI\Model\DispatchPlugin;
-use SnowIO\IdempotentAPI\Model\ResourceModificationTimeRepository;
+use SnowIO\IdempotentAPI\Model\WebApiMessageGroupRepository;
 use SnowIO\Lock\Api\LockService;
 use Magento\Framework\Webapi\Response;
 use \Magento\Framework\App\RequestInterface;
@@ -20,7 +20,7 @@ use Zend\Http\Header\IfUnmodifiedSince;
 
 class DispatchPluginTest extends PHPUnit_Framework_TestCase
 {
-    /** @var  ResourceModificationTimeRepository | PHPUnit_Framework_MockObject_MockObject */
+    /** @var  WebApiMessageGroupRepository | PHPUnit_Framework_MockObject_MockObject */
     private $mockResourceTimestampRespository;
 
     /** @var  LockService | PHPUnit_Framework_MockObject_MockObject */
@@ -56,7 +56,7 @@ class DispatchPluginTest extends PHPUnit_Framework_TestCase
 
     public function setUp()
     {
-        $this->mockResourceTimestampRespository = $this->getMockBuilder(ResourceModificationTimeRepository::class)
+        $this->mockResourceTimestampRespository = $this->getMockBuilder(WebApiMessageGroupRepository::class)
             ->disableOriginalConstructor()->setMethods([
                 'getLastModificationTime',
                 'updateModificationTime'

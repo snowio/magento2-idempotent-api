@@ -16,7 +16,7 @@ class DispatchPlugin
     private $response;
     private $lockService;
     private $resourceConnection;
-    private $modificationTimeRepo;
+    private $messageGroupRepository;
     private $errorProcessor;
 
     public function __construct(
@@ -24,14 +24,14 @@ class DispatchPlugin
         Response $response,
         LockService $lockService,
         ResourceConnection $resourceConnection,
-        ResourceModificationTimeRepository $resourceTimestampRepository,
+        WebApiMessageGroupRepository $messageGroupRepository,
         ErrorProcessor $errorProcessor
     ) {
         $this->request = $request;
         $this->response = $response;
         $this->lockService = $lockService;
         $this->resourceConnection = $resourceConnection;
-        $this->modificationTimeRepo = $resourceTimestampRepository;
+        $this->messageGroupRepository = $messageGroupRepository;
         $this->errorProcessor = $errorProcessor;
     }
 
@@ -47,7 +47,7 @@ class DispatchPlugin
         $messageGroupId = $this->request->getHeader('X-Message-Group-ID', $default = false);
         $messageTimestamp = $this->request->getHeader('X-Message-Timestamp', $default = false);
 
-        if ($messageGroupId === false) {
+        if ($messageGroupId === false || $messageTimestamp === false) {
             return $proceed($request);
         }
 
@@ -57,17 +57,13 @@ class DispatchPlugin
         }
 
         try {
-            if ($messageTimestamp !== false &&
-                $lastModificationTime = $this->modificationTimeRepo->getLastModificationTime($messageGroupId)
-            ) {
-                if (!$this->isUnmodifiedSince($lastModificationTime, $messageTimestamp)) {
-                    $this->response->setStatusCode(412);
-                    return $this->response;
-                }
-                $updateTimestamp = $messageTimestamp;
-            } else {
-                $lastModificationTime = null;
-                $updateTimestamp = \time();
+            $messageGroup = $this->messageGroupRepository->getMessageGroup($messageGroupId);
+            $lastTimestamp = $messageGroup['timestamp'] ?? null;
+            $lastVersion = $messageGroup['version'] ?? null;
+
+            if ($lastTimestamp !== null && $messageTimestamp < $lastTimestamp) {
+                $this->response->setStatusCode(412);
+                return $this->response;
             }
 
             $connection = $this->resourceConnection->getConnection();
@@ -83,10 +79,11 @@ class DispatchPlugin
                     return $response;
                 }
 
-                $this->modificationTimeRepo->updateModificationTime(
+                $this->messageGroupRepository->updateModificationTime(
                     $messageGroupId,
-                    $updateTimestamp,
-                    $lastModificationTime
+                    $messageTimestamp,
+                    $lastVersion,
+                    $lastTimestamp
                 );
                 $connection->commit();
                 return $response;
@@ -94,6 +91,9 @@ class DispatchPlugin
                 $connection->rollBack();
                 throw $e;
             }
+        } catch (ConflictException $e) {
+            $this->response->setStatusCode(409);
+            return $this->response;
         } catch (\Exception $e) {
             $e = $this->errorProcessor->maskException($e);
             $this->response->setStatusCode($e->getHttpCode());
@@ -104,10 +104,5 @@ class DispatchPlugin
         } finally {
             $this->lockService->releaseLock("idempotent_api.$messageGroupId");
         }
-    }
-
-    private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
-    {
-        return $modificationTime <= $expectedTime;
     }
 }
