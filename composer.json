@@ -4,7 +4,7 @@
     "license": "MIT",
     "require": {
         "php": ">=7",
-        "magento/framework": "^100|^101",
+        "magento/framework": "^100|^101|^102",
         "snowio/magento2-lock": "^1"
     },
     "autoload": {
