@@ -8,7 +8,12 @@ class ResourceModificationTimeRepository
 {
     private \Magento\Framework\DB\Adapter\AdapterInterface $dbConnection;
 
-    public function __construct(\Magento\Framework\ObjectManager\ContextInterface $dbContext, $connectionName = null)
+    /**
+     * ResourceModificationTimeRepository constructor.
+     * @param Context $dbContext
+     * @param null $connectionName
+     */
+    public function __construct(Context $dbContext, $connectionName = null)
     {
         $this->dbConnection = $dbContext->getResources()->getConnection($connectionName);
     }
