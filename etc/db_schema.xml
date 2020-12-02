@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <schema xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="urn:magento:framework:Setup/Declaration/Schema/etc/schema.xsd">
   <table name="webapi_resource_modification_log" resource="default" engine="innodb" comment="webapi_resource_modification_log">
-    <column xsi:type="varchar" name="identifier" nullable="false" length="255" comment="Resource Identifier"/>
-    <column xsi:type="decimal" name="timestamp" scale="0" precision="10" unsigned="true" nullable="false" comment="Timestamp"/>
-    <constraint xsi:type="primary" referenceId="PRIMARY">
-      <column name="identifier"/>
-    </constraint>
+      <column xsi:type="varchar" name="identifier" nullable="false" length="255" comment="Resource Identifier"/>
+      <column xsi:type="decimal" name="timestamp" scale="0" precision="10" unsigned="true" nullable="false" comment="Timestamp"/>
+      <constraint xsi:type="primary" referenceId="PRIMARY">
+        <column name="identifier"/>
+      </constraint>
   </table>
 </schema>
