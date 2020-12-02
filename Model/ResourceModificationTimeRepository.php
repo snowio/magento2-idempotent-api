@@ -6,9 +6,9 @@ use Magento\Framework\Model\ResourceModel\Db\Context;
 
 class ResourceModificationTimeRepository
 {
-    private $dbConnection;
+    private \Magento\Framework\DB\Adapter\AdapterInterface $dbConnection;
 
-    public function __construct(Context $dbContext, $connectionName = null)
+    public function __construct(\Magento\Framework\ObjectManager\ContextInterface $dbContext, $connectionName = null)
     {
         $this->dbConnection = $dbContext->getResources()->getConnection($connectionName);
     }

@@ -12,15 +12,15 @@ use SnowIO\Lock\Api\LockService;
 
 class DispatchPlugin
 {
-    private $request;
-    private $response;
-    private $lockService;
-    private $resourceConnection;
-    private $modificationTimeRepo;
-    private $errorProcessor;
+    private \Magento\Framework\Webapi\Request $request;
+    private \Magento\Framework\Webapi\Response $response;
+    private \SnowIO\Lock\Api\LockService $lockService;
+    private \Magento\Framework\App\ResourceConnection $resourceConnection;
+    private \SnowIO\IdempotentAPI\Model\ResourceModificationTimeRepository $modificationTimeRepo;
+    private \Magento\Framework\Webapi\ErrorProcessor $errorProcessor;
 
     public function __construct(
-        Request $request,
+        \Magento\Framework\App\RequestInterface $request,
         Response $response,
         LockService $lockService,
         ResourceConnection $resourceConnection,
