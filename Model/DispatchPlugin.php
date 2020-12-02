@@ -1,9 +1,9 @@
 <?php
 namespace SnowIO\IdempotentAPI\Model;
 
+use Magento\Framework\App\RequestInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Webapi\ErrorProcessor;
-use Magento\Framework\Webapi\Request;
 use Magento\Framework\Webapi\Response;
 use Magento\Framework\Webapi\Rest\Response as RestResponse;
 use Magento\Webapi\Controller\Rest;
@@ -12,15 +12,24 @@ use SnowIO\Lock\Api\LockService;
 
 class DispatchPlugin
 {
-    private $request;
-    private $response;
-    private $lockService;
-    private $resourceConnection;
-    private $modificationTimeRepo;
-    private $errorProcessor;
+    private RequestInterface $request;
+    private Response $response;
+    private LockService $lockService;
+    private ResourceConnection $resourceConnection;
+    private ResourceModificationTimeRepository $modificationTimeRepo;
+    private ErrorProcessor $errorProcessor;
 
+    /**
+     * DispatchPlugin constructor.
+     * @param RequestInterface $request
+     * @param Response $response
+     * @param LockService $lockService
+     * @param ResourceConnection $resourceConnection
+     * @param ResourceModificationTimeRepository $resourceTimestampRepository
+     * @param ErrorProcessor $errorProcessor
+     */
     public function __construct(
-        Request $request,
+        RequestInterface $request,
         Response $response,
         LockService $lockService,
         ResourceConnection $resourceConnection,
@@ -35,10 +44,16 @@ class DispatchPlugin
         $this->errorProcessor = $errorProcessor;
     }
 
+    /**
+     * @param $frontController
+     * @param \Closure $proceed
+     * @param RequestInterface $request
+     * @return Response|mixed
+     */
     public function aroundDispatch(
         $frontController,
         \Closure $proceed,
-        \Magento\Framework\App\RequestInterface $request
+        RequestInterface $request
     ) {
         if (!$frontController instanceof Rest && !$frontController instanceof Soap) {
             return $proceed($request);
@@ -106,7 +121,12 @@ class DispatchPlugin
         }
     }
 
-    private function isUnmodifiedSince(int $modificationTime, int $expectedTime)
+    /**
+     * @param int $modificationTime
+     * @param int $expectedTime
+     * @return bool
+     */
+    private function isUnmodifiedSince(int $modificationTime, int $expectedTime): bool
     {
         return $modificationTime <= $expectedTime;
     }

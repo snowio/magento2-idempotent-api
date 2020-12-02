@@ -1,0 +1,11 @@
+{
+    "webapi_resource_modification_log": {
+        "column": {
+            "identifier": true,
+            "timestamp": true
+        },
+        "constraint": {
+            "PRIMARY": true
+        }
+    }
+}

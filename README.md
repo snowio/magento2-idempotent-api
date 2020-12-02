@@ -6,10 +6,14 @@ Module that ensures all API operations are *idempotent*.
 > --<cite>RestApiTutorial.com http://www.restapitutorial.com/lessons/idempotency.html</cite>
 
 ## Prerequisites
-* PHP 7.0 or newer
+* PHP 7.4 or newer
 * Composer  (https://getcomposer.org/download/).
-* `magento/framework` 100 or newer
+* `magento/framework` 103 or newer
 * `snowio/magento2-lock` version 1 or newer.
+
+### Magento Versions
+- `<= 2.3.x` use 1.x tags
+- `>= 2.4.x` use master
 
 ## Installation
 ```
