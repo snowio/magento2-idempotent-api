@@ -3,7 +3,7 @@
     "type": "magento2-module",
     "license": "MIT",
     "require": {
-        "php": "^7.4",
+        "php": "^7.4||^8.1",
         "magento/framework": "^103",
         "snowio/magento2-lock": "^1"
     },
@@ -14,7 +14,6 @@
         }
     },
     "require-dev": {
-        "zendframework/zend-http": "^2.5",
         "rector/rector": "^0.8.56"
     }
 }
